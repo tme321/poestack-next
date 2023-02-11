@@ -8,11 +8,11 @@ export default function StyledInput({
   label = "",
   placeholder = "",
 }: {
-  value: string | number | undefined | null;
+  value: string | number | null | undefined;
   placeholder?: string;
   type?: string;
   label?: string;
-  onChange: (e) => void;
+  onChange: (e: string) => void;
 }) {
   const id = nanoid();
 

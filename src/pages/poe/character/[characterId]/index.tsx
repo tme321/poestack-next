@@ -18,7 +18,7 @@ import CharacterLevelChart from "../../../../components/character-level-chart";
 import Head from "next/head";
 import client from "../../../../poe-stack-apollo-client";
 
-const snapshotQuery = gql`
+const characterDetailsQuery = gql`
   query CharacterSnapshotsSearch($snapshotId: String!) {
     characterSnapshot(snapshotId: $snapshotId) {
       id
@@ -95,28 +95,54 @@ const snapshotQuery = gql`
   }
 `;
 
+const charactersListQuery = gql`
+  query CharacterSnapshotRecords($characterId: String!) {
+    characterSnapshotRecords(characterId: $characterId) {
+      id
+      characterId
+      timestamp
+      experience
+      level
+    }
+  }
+`;
+
+const passiveTreeQuery = gql`
+  query PassiveTree($passiveTreeVersion: String!) {
+    passiveTree(passiveTreeVersion: $passiveTreeVersion) {
+      constants {
+        minX
+        minY
+        maxX
+        maxY
+        skillsPerOrbit
+        orbitRadii
+      }
+      nodeMap
+      connectionMap
+    }
+  }
+`;
+
+const takeCharacterSnapshotQuery = gql`
+  mutation TakeCharacterSnapshot($characterId: String!) {
+    takeCharacterSnapshot(characterId: $characterId)
+  }
+`;
+
 export default function Character({ characterSnapshot }) {
   const router = useRouter();
+
   const { characterId, snapshotId } = router.query;
 
-  const [characterSnapshots, setCharacterSnapshots] = useState<
-    CharacterSnapshotRecord[]
-  >([]);
+  const [characterSnapshots, setCharacterSnapshots] = 
+    useState<CharacterSnapshotRecord[]>([]);
+
   const [currentSnapshot, setCurrentSnapshot] =
     useState<CharacterSnapshot | null>(characterSnapshot);
 
   const { refetch: refetchSnapshots } = useQuery(
-    gql`
-      query CharacterSnapshotRecords($characterId: String!) {
-        characterSnapshotRecords(characterId: $characterId) {
-          id
-          characterId
-          timestamp
-          experience
-          level
-        }
-      }
-    `,
+    charactersListQuery,
     {
       skip: !characterId,
       variables: { characterId: characterId },
@@ -137,7 +163,7 @@ export default function Character({ characterSnapshot }) {
     }
   );
 
-  useQuery(snapshotQuery, {
+  useQuery(characterDetailsQuery, {
     skip: !snapshotId,
     variables: { snapshotId: snapshotId },
     onCompleted(data) {
@@ -147,23 +173,9 @@ export default function Character({ characterSnapshot }) {
 
   const [passiveTreeData, setPassiveTreeData] =
     useState<PassiveTreeResponse | null>(null);
+
   const { refetch: refetchPassiveTreeData } = useQuery(
-    gql`
-      query PassiveTree($passiveTreeVersion: String!) {
-        passiveTree(passiveTreeVersion: $passiveTreeVersion) {
-          constants {
-            minX
-            minY
-            maxX
-            maxY
-            skillsPerOrbit
-            orbitRadii
-          }
-          nodeMap
-          connectionMap
-        }
-      }
-    `,
+    passiveTreeQuery,
     {
       skip: true,
       variables: { passiveTreeVersion: "3.20" },
@@ -191,11 +203,7 @@ export default function Character({ characterSnapshot }) {
   }, [passiveTreeData, refetchPassiveTreeData]);
 
   const [takeSnapshot] = useMutation(
-    gql`
-      mutation TakeCharacterSnapshot($characterId: String!) {
-        takeCharacterSnapshot(characterId: $characterId)
-      }
-    `,
+    takeCharacterSnapshotQuery,
     {
       variables: { characterId: characterId },
       onCompleted(data, clientOptions) {
@@ -382,7 +390,7 @@ export async function getServerSideProps(context) {
 
   if (characterId && snapshotId) {
     const resp: any = await client.query({
-      query: snapshotQuery,
+      query: characterDetailsQuery,
       variables: { snapshotId: snapshotId },
     });
 

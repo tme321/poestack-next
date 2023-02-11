@@ -1,27 +1,17 @@
+import { useState, useEffect, Dispatch } from "react";
 import { gql, useQuery } from "@apollo/client";
-
-import Link from "next/link";
-import Image from "next/image";
-
-import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
-import StyledCard from "../../../components/styled-card";
+import client from "../../../poe-stack-apollo-client";
 import {
   CharacterSnapshotSearchResponse,
   CharacterSnapshotSearchAggregationsResponse,
 } from "../../../__generated__/resolvers-types";
 import { usePoeLeagueCtx } from "../../../contexts/league-context";
-import CharacterAggregationDisplay from "../../../components/character-aggregation-display";
-import StyledInput from "../../../components/styled-input";
 import {
   CharacterSnapshotSearch,
-  CharacterSnapshotUniqueAggregationKeysResponse,
 } from "../../../__generated__/resolvers-types";
-import {
-  StyledSkillImageTooltip,
-  StyledTooltip,
-} from "../../../components/styled-tooltip";
-import client from "../../../poe-stack-apollo-client";
+import StyledAggregatorPanel, { StyledAggregatorPanelModel } from "../../../components/styled-aggregator-panel";
+import StyledMultiSearch from "../../../components/styled-multi-search";
+import StyledCharactersSummaryTable from "../../../components/styled-characters-summary-table";
 
 const generalSearch = gql`
   query Snapshots($search: CharacterSnapshotSearch!) {
@@ -67,23 +57,13 @@ const generalSearch = gql`
   }
 `;
 
-const uniqueKeysQuery = gql`
-  query CharacterSnapshotsUniqueAggregationKeys($league: String!) {
-    characterSnapshotsUniqueAggregationKeys(league: $league) {
-      characterClassKeys
-      keystoneKeys
-      mainSkillKeys
-      itemKeys
-    }
-  }
-`;
-
+/**
+ * Characters page
+ */
 export default function Characters({
   initialSearchResponse,
   unqiueKeysResponse,
 }) {
-  const router = useRouter();
-
   const { league } = usePoeLeagueCtx();
 
   const [search, setSearch] = useState<CharacterSnapshotSearch>({
@@ -100,226 +80,186 @@ export default function Characters({
 
   const [localSearchString, setLocalSearchString] = useState<string>("");
 
-  const [searchResponse, setSearchResponse] = useState<
+  const [characters, setCharacters] = useState<
     CharacterSnapshotSearchResponse | undefined | null
   >(initialSearchResponse?.characterSnapshotsSearch);
-  const [aggregationSearchResponse, setAggregationSearchResponse] = useState<
+
+  const [aggregations, setAggregations] = useState<
     CharacterSnapshotSearchAggregationsResponse | undefined | null
   >(initialSearchResponse?.characterSnapshotsSearchAggregations);
-  const { refetch: reftechGeneralSearch } = useQuery(generalSearch, {
-    skip: true,
-    variables: { search: { ...search, ...{ league: league } } },
-    onCompleted(data) {
-      setSearchResponse({
-        ...searchResponse,
-        ...data.characterSnapshotsSearch,
-      });
-      setAggregationSearchResponse({
-        ...aggregationSearchResponse,
-        ...data.characterSnapshotsSearchAggregations,
-      });
-    },
-  });
+
+  const { refetch: reftechGeneralSearch } = useQuery(
+    generalSearch, 
+    {
+      skip: true,
+      variables: { search: { ...search, ...{ league: league } } },
+      onCompleted(data) {
+        setCharacters({
+          ...characters,
+          ...data.characterSnapshotsSearch,
+        });
+        setAggregations({
+          ...aggregations,
+          ...data.characterSnapshotsSearchAggregations,
+        });
+      },
+    });
 
   useEffect(() => {
     reftechGeneralSearch();
   }, [search, reftechGeneralSearch, league]);
 
-  const updateIncludeExclude = (entry, includedKey, excludedKey) => {
-    if (search[includedKey]?.includes(entry.key)) {
-      setSearch({
-        ...search,
-        ...{
-          [excludedKey]: [...search[excludedKey]!, entry.key],
-          [includedKey]: search[includedKey]!.filter((e) => e !== entry.key),
-        },
-      });
-    } else if (search[excludedKey]?.includes(entry.key)) {
-      setSearch({
-        ...search,
-        ...{
-          [excludedKey]: search[excludedKey]!.filter((e) => e !== entry.key),
-        },
-      });
-    } else {
-      setSearch({
-        ...search,
-        ...{
-          [includedKey]: [...search[includedKey]!, entry.key],
-        },
-      });
-    }
-  };
-
-  if (!searchResponse) {
+  if (!characters) {
     return <>Loading...</>;
   }
+
+  /*
+   * Define callbacks as functions instead of consts
+   * to skip revaluation on every component view update.
+   */
+
+  function updateIncludeExclude (
+    search: CharacterSnapshotSearch, 
+    setSearch:Dispatch<any>, 
+    entry: {key: string, value: any}, 
+    includedKey: string, 
+    excludedKey: string): void {
+  
+      if (search[includedKey]?.includes(entry.key)) {
+        setSearch({
+          ...search,
+          ...{
+            [excludedKey]: [...search[excludedKey]!, entry.key],
+            [includedKey]: search[includedKey]!.filter((e: string) => e !== entry.key),
+          },
+        });
+      } else if (search[excludedKey]?.includes(entry.key)) {
+        setSearch({
+          ...search,
+          ...{
+            [excludedKey]: search[excludedKey]!.filter((e: string) => e !== entry.key),
+          },
+        });
+      } else {
+        setSearch({
+          ...search,
+          ...{
+            [includedKey]: [...search[includedKey]!, entry.key],
+          },
+        });
+      }
+  }
+
+  function onSkillChange(mainSkill: {key: string, value: any}) {
+    updateIncludeExclude( search, setSearch,
+      mainSkill,
+      "includedMainSkills",
+      "excludedMainSkills"
+    )
+  }
+
+  function onClassChange(characterClass: {key: string, value: any}) {
+    updateIncludeExclude( search, setSearch,
+      characterClass,
+      "includedCharacterClasses",
+      "excludedCharacterClasses"
+    );
+  }
+
+  function onItemChange(item: {key: string, value: any}) {
+    updateIncludeExclude( search, setSearch,
+      item,
+      "includedItemKeys",
+      "excludedItemKeys"
+    );
+  }
+
+  function onKeystoneChange(keyStone: {key: string, value: any}) {
+    updateIncludeExclude( search, setSearch,
+      keyStone,
+      "includedKeyStoneNames",
+      "excludedKeyStoneNames"
+    );
+  }
+
+  /*
+   * These models are used to create the individual
+   * aggregation panels
+   */
+
+  const aggregatorPanels: Array<StyledAggregatorPanelModel> = [{       
+    title:"Skills",
+    aggregation:aggregations?.mainSkillAggreagtion,
+    onSelectionChanged: onSkillChange,
+    includedRows:search.includedMainSkills!,
+    excludedRows:search.excludedMainSkills!,
+    keys: unqiueKeysResponse?.mainSkillKeys,
+    matches: aggregations?.totalMatches,
+    searchString: localSearchString
+  },
+  {
+    title: "Class",
+    aggregation: aggregations?.characterClassAggregation,
+    onSelectionChanged: onClassChange,
+    includedRows: search.includedCharacterClasses!,
+    excludedRows: search.excludedCharacterClasses!,
+    keys: unqiueKeysResponse?.characterClassKeys,
+    matches: aggregations?.totalMatches,
+    searchString: localSearchString
+  },
+  {
+    title: "Items",
+    aggregation: aggregations?.itemKeyAggreagtion,
+    onSelectionChanged: onItemChange,
+    includedRows: search.includedItemKeys!,
+    excludedRows: search.excludedItemKeys!,
+    keys: unqiueKeysResponse?.itemKeys,
+    matches: aggregations?.totalMatches,
+    searchString: localSearchString
+  },
+  {
+    title: "Keystones",
+    aggregation: aggregations?.keystoneAggregation,
+    onSelectionChanged: onKeystoneChange,
+    includedRows: search.includedKeyStoneNames!,
+    excludedRows: search.excludedKeyStoneNames!,
+    keys: unqiueKeysResponse?.keystoneKeys,
+    matches: aggregations?.totalMatches,
+    searchString: localSearchString
+  }];
 
   return (
     <>
       <div className="flex flex-row space-x-2 ">
         <div className="flex flex-col space-y-2 w-1/6 lg:w-1/5">
-          <StyledCard title={"Search"}>
-            <StyledInput
-              value={localSearchString}
-              onChange={(e) => {
-                setLocalSearchString(e);
-              }}
-              placeholder="Search Filters..."
-            />
-          </StyledCard>
-          <StyledCard title="Skills" className="h-[400px]">
-            <CharacterAggregationDisplay
-              aggregation={aggregationSearchResponse?.mainSkillAggreagtion}
-              onSelectionChanged={(mainSkill) => {
-                updateIncludeExclude(
-                  mainSkill,
-                  "includedMainSkills",
-                  "excludedMainSkills"
-                );
-              }}
-              includedRows={search.includedMainSkills!}
-              excludedRows={search.excludedMainSkills!}
-              allKeys={unqiueKeysResponse?.mainSkillKeys ?? []}
-              totalMatches={aggregationSearchResponse?.totalMatches ?? 0}
-              localSearchString={localSearchString}
-            />
-          </StyledCard>
-          <StyledCard title="Class" className="h-[400px]">
-            <CharacterAggregationDisplay
-              aggregation={aggregationSearchResponse?.characterClassAggregation}
-              onSelectionChanged={(characterClass) => {
-                updateIncludeExclude(
-                  characterClass,
-                  "includedCharacterClasses",
-                  "excludedCharacterClasses"
-                );
-              }}
-              includedRows={search.includedCharacterClasses!}
-              excludedRows={search.excludedCharacterClasses!}
-              allKeys={unqiueKeysResponse?.characterClassKeys ?? []}
-              totalMatches={aggregationSearchResponse?.totalMatches ?? 0}
-              localSearchString={localSearchString}
-            />
-          </StyledCard>
-          <StyledCard title="Items" className="h-[400px]">
-            <CharacterAggregationDisplay
-              aggregation={aggregationSearchResponse?.itemKeyAggreagtion}
-              onSelectionChanged={(item) => {
-                updateIncludeExclude(
-                  item,
-                  "includedItemKeys",
-                  "excludedItemKeys"
-                );
-              }}
-              includedRows={search.includedItemKeys!}
-              excludedRows={search.excludedItemKeys!}
-              allKeys={unqiueKeysResponse?.itemKeys ?? []}
-              totalMatches={aggregationSearchResponse?.totalMatches ?? 0}
-              localSearchString={localSearchString}
-            />
-          </StyledCard>
-          <StyledCard title="Keystones" className="h-[400px]">
-            <CharacterAggregationDisplay
-              aggregation={aggregationSearchResponse?.keystoneAggregation}
-              onSelectionChanged={(keyStone) => {
-                updateIncludeExclude(
-                  keyStone,
-                  "includedKeyStoneNames",
-                  "excludedKeyStoneNames"
-                );
-              }}
-              includedRows={search.includedKeyStoneNames!}
-              excludedRows={search.excludedKeyStoneNames!}
-              allKeys={unqiueKeysResponse?.keystoneKeys ?? []}
-              totalMatches={aggregationSearchResponse?.totalMatches ?? 0}
-              localSearchString={localSearchString}
-            />
-          </StyledCard>
+          
+          <StyledMultiSearch value={localSearchString} onChange={(e) => { setLocalSearchString(e); }}/>
+
+          {aggregatorPanels.map(props=><StyledAggregatorPanel key={props.title} {...props}/>)}
+          
         </div>
-        <StyledCard title="Characters" className="flex-1">
-          <table>
-            {/* Setup for adding click sort like PoeNinja */}
-            <thead className="text-left">
-              <tr>
-                <th className="pl-2">Name</th>
-                <th className="pl-2">Level</th>
-                <th className="pl-2">Skill</th>
-                <th className="pl-2">Life</th>
-                <th className="pl-2">Es</th>
-              </tr>
-            </thead>
-            <tbody className="">
-              {searchResponse.snapshots.map((snapshot) => (
-                <>
-                  <tr className="hover:bg-skin-primary border-y-2 border-slate-700/50">
-                    <td>
-                      <Link
-                        href={`/poe/character/${snapshot.characterId}`}
-                        className="hover:text-skin-accent hover:underline pl-3"
-                      >
-                        {snapshot?.name}
-                      </Link>
-                    </td>
-                    <td>
-                      <ul className="flex flex-row space-x-3 justify-left">
-                        <li className="text-center list-none w-1/5">
-                          {snapshot.level}
-                        </li>
-                        <li className="list-none">
-                          <StyledTooltip
-                            texts={[`${snapshot.characterClass}`]}
-                            placement="right"
-                            className="bg-slate-800"
-                          >
-                            <Image
-                              src={`/assets/poe/classes/${snapshot.characterClass}.png`}
-                              alt={snapshot.characterClass}
-                              width={39}
-                              height={30}
-                            />
-                          </StyledTooltip>
-                        </li>
-                      </ul>
-                    </td>
 
-                    <td>
-                      {snapshot.mainSkillKey ? (
-                        <li className="list-none">
-                          <StyledSkillImageTooltip
-                            texts={[`${snapshot.mainSkillKey}`]}
-                            placement="left"
-                            title="Skills"
-                            imageString={snapshot.mainSkillKey}
-                            className="bg-slate-800"
-                          >
-                            <Image
-                              src={`/assets/poe/skill_icons/${snapshot.mainSkillKey}.png`}
-                              alt=""
-                              width={39}
-                              height={30}
-                            />
-                          </StyledSkillImageTooltip>
-                        </li>
-                      ) : null}
-                    </td>
+        <StyledCharactersSummaryTable characters={characters}/>
 
-                    <td className="font-semibold text-red-600">
-                      {snapshot.life}
-                    </td>
-                    <td className="font-semibold text-teal-300">
-                      {snapshot.energyShield}
-                    </td>
-                  </tr>
-                </>
-              ))}
-            </tbody>
-          </table>
-        </StyledCard>
       </div>
     </>
   );
 }
+
+/*
+ * For ssr 
+ */
+
+const uniqueKeysQuery = gql`
+  query CharacterSnapshotsUniqueAggregationKeys($league: String!) {
+    characterSnapshotsUniqueAggregationKeys(league: $league) {
+      characterClassKeys
+      keystoneKeys
+      mainSkillKeys
+      itemKeys
+    }
+  }
+`;
 
 export async function getServerSideProps({ req, res, query }) {
   res.setHeader(

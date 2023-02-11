@@ -21,7 +21,7 @@ export default function CharacterAggregationDisplay({
   localSearchString: string;
   includedRows?: any[];
   excludedRows?: any[];
-  onSelectionChanged?: (e) => void;
+  onSelectionChanged?: (e: {key: string, value: any}) => void;
 }) {
   if (!aggregation) {
     return <>Loading...</>;
@@ -91,7 +91,7 @@ export default function CharacterAggregationDisplay({
   return (
     <>
       <div className="flex flex-col flex-1 h-full">
-        <div className="truncate grid capitalize cursor-pointer  items-center hover:bg-skin-primary text-sm pr-2 ">
+        <div className="truncate grid capitalize cursor-pointer items-center hover:bg-skin-primary text-sm pr-2 ">
           {excludedRows.map((e) => (
             <>
               <div
